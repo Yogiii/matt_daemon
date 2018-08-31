@@ -14,6 +14,14 @@
 
 CDaemon *CDaemon::_singleton = nullptr;
 
+CDaemon *CDaemon::instance()
+{
+    // instance unique
+    if (!_singleton)
+        _singleton = new CDaemon;
+    return _singleton;
+}
+
 CDaemon::CDaemon()
 {
     Tintin_reporter::record("Constructor", "LOG");
@@ -31,7 +39,7 @@ bool CDaemon::init()
         return false;
     }
     else if (pid > 0)
-        exit(0);
+        return(0);
     umask(0);
     s_sid = setsid();
     if (s_sid == -1)
@@ -68,19 +76,26 @@ bool CDaemon::init()
     return true;
 }
 
-void CDaemon::startServer()
+bool CDaemon::startServer()
 {
     Tintin_reporter::record("startServer", "INFO");
 
     if (SOCKET_ERROR == bind(_serverSocket, (SOCKADDR *)&_serverSin, sizeof(_serverSin)))
+    {
         Tintin_reporter::record("Error on bind", "ERROR");
+        return false;
+    }
 
     if (SOCKET_ERROR == listen(_serverSocket, MAX_NB_CLIENT))
+    {
         Tintin_reporter::record("Error on listen", "ERROR");
+        return false;
+    }
 
     for (int i = 1; i < _NSIG; i++)
         signal(i, *catchedSignal);
 
+    return true;
 }
 
 void CDaemon::stopServer()
@@ -120,6 +135,7 @@ void CDaemon::run()
         if (_countClient < MAX_NB_CLIENT)
         {
             _countClient++;
+
             std::thread thread(CDaemon::startClient, fd, this);
             thread.detach();
         }
@@ -138,6 +154,7 @@ void CDaemon::startClient(int fd, CDaemon *daemon)
     char buff[BUFFER_SIZE + 1];
     while (42)
     {
+        bzero(&buff, BUFFER_SIZE);
         response = recv(fd, buff, BUFFER_SIZE, 0);
         if (response > 0)
         {
@@ -146,6 +163,7 @@ void CDaemon::startClient(int fd, CDaemon *daemon)
             if (!content.compare("quit"))
             {
                 daemon->stopServer();
+                free(CDaemon::instance());
                 exit(0);
             }
             Tintin_reporter::record(content, "LOG");
@@ -174,8 +192,16 @@ void CDaemon::removeClient(int fd)
 void CDaemon::catchedSignal(int signal)
 {
 
+    CDaemon::instance()->stopServer();
     // todo : get all needed variable for stopserver. change them to static ?
     // stopServer();
     Tintin_reporter::record("signal: " + std::to_string(signal), "SIGNAL");
-    //exit(signal);
+    free(CDaemon::instance());
+    exit(signal);
+}
+
+
+CDaemon::~CDaemon()
+{
+    Tintin_reporter::record("Destructor", "LOG");
 }

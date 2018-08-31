@@ -15,8 +15,9 @@ int main()
 
     if (daemon->init())
     {
-        daemon->startServer();
-        daemon->run();
+        if (daemon->startServer())
+            daemon->run();
     }
+    free(daemon);
     return 0;
 }

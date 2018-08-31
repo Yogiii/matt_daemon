@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
+#include <memory>
 
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
@@ -22,16 +23,11 @@ class CDaemon
 {
 public:
 
-    static CDaemon *instance()
-    {
-        // instance unique
-        if (!_singleton)
-            _singleton = new CDaemon;
-        return _singleton;
-    }
+    static CDaemon *instance();
 
+    virtual ~CDaemon();
     bool init();
-    void startServer();
+    bool startServer();
     void run();
     void stopServer();
     void decrementCounter();
@@ -46,7 +42,7 @@ private:
     int _countClient = 0;
 	std::vector<int> _fds;
 
-    static CDaemon *_singleton;
+    static CDaemon* _singleton;
     CDaemon();
 };
 
