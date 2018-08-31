@@ -8,6 +8,9 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstring>
+#include <thread>
+#include <algorithm>
+#include <signal.h>
 
 CDaemon::CDaemon()
 {
@@ -52,6 +55,7 @@ bool CDaemon::init()
     if (returnCode)
     {
         Tintin_reporter::record("Locked ... cannot init daemon", "ERROR");
+        std::cout << "Locked ... cannot init daemon" << std::endl;
         return false;
     }
 
@@ -72,13 +76,20 @@ void CDaemon::startServer()
 
     if (SOCKET_ERROR == listen(_serverSocket, MAX_NB_CLIENT))
         Tintin_reporter::record("Error on listen", "ERROR");
+
+    for (int i = 1; i < _NSIG; i++)
+        signal(i, catchedSignal);
 }
 
 void CDaemon::stopServer()
 {
-    Tintin_reporter::record("stopServer", "INFO");
+    for (std::vector<int>::iterator it = _fds.begin(); it != _fds.end(); ++it)
+    {
+        close(*it);
+    }
+    Tintin_reporter::record("Exiting ... ", "INFO");
 
-    if (SOCKET_ERROR == closesocket(_serverSocket))
+    if (SOCKET_ERROR == close(_serverSocket))
         Tintin_reporter::record("Error on close", "ERROR");
 
     int returnCode = flock(_lockFilefd, LOCK_UN);
@@ -94,15 +105,76 @@ void CDaemon::run()
 
     /* Socket et contexte d'adressage du client */
     SOCKADDR_IN csin;
+    int fd = 0;
     // SOCKET clientSocket;
     // socklen_t crecsize = sizeof(csin);
 
-    socklen_t taille = sizeof(csin);
+    socklen_t lenght = sizeof(csin);
 
     while (42)
     {
-        accept(_serverSocket, (SOCKADDR *)&csin, &taille);
-
-        Tintin_reporter::record("New client connected", "INFO");
+        if ((fd = accept(_serverSocket, (SOCKADDR *)&csin, &lenght)) == -1)
+            std::cout << "error accepting client" << std::endl;
+        if (_countClient < 3)
+        {
+            _countClient++;
+            std::thread thread(CDaemon::startClient, fd, this);
+            thread.detach();
+        }
+        else
+        {
+            Tintin_reporter::record("A client tried to connect but no space left on the queue", "LOG");
+            close(fd);
+        }
     }
+}
+
+void CDaemon::startClient(int fd, CDaemon *daemon)
+{
+    Tintin_reporter::record("New client connected", "INFO");
+    int response;
+    char buff[BUFFER_SIZE + 1];
+    while (42)
+    {
+        response = recv(fd, buff, BUFFER_SIZE, 0);
+        if (response > 0)
+        {
+            std::string content = buff;
+            content.erase(std::remove(content.begin(), content.end(), '\n'), content.end());
+            if (!content.compare("quit"))
+            {
+                daemon->stopServer();
+                exit(0);
+            }
+            Tintin_reporter::record(content, "LOG");
+        }
+        else
+        {
+            Tintin_reporter::record("Client has been disconnected from the server", "INFO");
+            daemon->removeClient(fd);
+            break;
+        }
+    }
+}
+
+void CDaemon::decrementCounter(void)
+{
+    _countClient--;
+}
+
+void CDaemon::removeClient(int fd)
+{
+    _fds.erase(std::remove(_fds.begin(), _fds.end(), fd), _fds.end());
+    decrementCounter();
+    close(fd);
+}
+
+void CDaemon::catchedSignal(int signal)
+{
+
+
+    // todo : get all needed variable for stopserver. change them to static ?
+    // stopServer();
+    Tintin_reporter::record("signal: " + std::to_string(signal), "SIGNAL");
+    exit(signal);
 }
