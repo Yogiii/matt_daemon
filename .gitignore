@@ -1,3 +1,5 @@
 *.d
 *.o
+*.pro
+*.pro.user
 settings.json

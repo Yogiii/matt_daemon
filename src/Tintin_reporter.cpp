@@ -18,7 +18,8 @@ void Tintin_reporter::record(std::string const &message, std::string const &type
               + "[" + type + "] - "
               + message;
 
-    // std::cout << outputStr.c_str() << std::endl;
+    //May comment
+    std::cout << outputStr.c_str() << std::endl;
 
     //Lets check if folders LOG PATH are there
     struct stat info;

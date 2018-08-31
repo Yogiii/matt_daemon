@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <signal.h>
 
+CDaemon *CDaemon::_singleton = nullptr;
+
 CDaemon::CDaemon()
 {
     Tintin_reporter::record("Constructor", "LOG");
@@ -19,12 +21,14 @@ CDaemon::CDaemon()
 
 bool CDaemon::init()
 {
+    Tintin_reporter::record("init", "LOG");
+
     pid_t pid, s_sid;
 
     if ((pid = fork()) == -1)
     {
-        std::cout << "Error fork fails !" << std::endl;
-        exit(1);
+        Tintin_reporter::record("Error fork fails !", "ERROR");
+        return false;
     }
     else if (pid > 0)
         exit(0);
@@ -32,12 +36,10 @@ bool CDaemon::init()
     s_sid = setsid();
     if (s_sid == -1)
     {
-        std::cout << "Error setsid fails ! " << s_sid << std::endl;
-        std::cout << std::strerror(errno) << std::endl;
-        exit(1);
+        Tintin_reporter::record("Error setsid fails !", "ERROR");
+        Tintin_reporter::record(std::strerror(errno), "ERROR");
+        return false;
     }
-
-    Tintin_reporter::record("init", "LOG");
 
     //Lets check if folders LOCK_PATH exists
     struct stat info;
@@ -55,7 +57,6 @@ bool CDaemon::init()
     if (returnCode)
     {
         Tintin_reporter::record("Locked ... cannot init daemon", "ERROR");
-        std::cout << "Locked ... cannot init daemon" << std::endl;
         return false;
     }
 
@@ -63,7 +64,7 @@ bool CDaemon::init()
     _serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     _serverSin.sin_addr.s_addr = htonl(INADDR_ANY);
     _serverSin.sin_family = AF_INET;
-    _serverSin.sin_port = htons(4242);
+    _serverSin.sin_port = htons(PORT);
     return true;
 }
 
@@ -78,7 +79,8 @@ void CDaemon::startServer()
         Tintin_reporter::record("Error on listen", "ERROR");
 
     for (int i = 1; i < _NSIG; i++)
-        signal(i, catchedSignal);
+        signal(i, *catchedSignal);
+
 }
 
 void CDaemon::stopServer()
@@ -106,16 +108,16 @@ void CDaemon::run()
     /* Socket et contexte d'adressage du client */
     SOCKADDR_IN csin;
     int fd = 0;
-    // SOCKET clientSocket;
-    // socklen_t crecsize = sizeof(csin);
 
     socklen_t lenght = sizeof(csin);
 
     while (42)
     {
         if ((fd = accept(_serverSocket, (SOCKADDR *)&csin, &lenght)) == -1)
-            std::cout << "error accepting client" << std::endl;
-        if (_countClient < 3)
+        {
+            Tintin_reporter::record("error accepting client", "ERROR");
+        }
+        if (_countClient < MAX_NB_CLIENT)
         {
             _countClient++;
             std::thread thread(CDaemon::startClient, fd, this);
@@ -172,9 +174,8 @@ void CDaemon::removeClient(int fd)
 void CDaemon::catchedSignal(int signal)
 {
 
-
     // todo : get all needed variable for stopserver. change them to static ?
     // stopServer();
     Tintin_reporter::record("signal: " + std::to_string(signal), "SIGNAL");
-    exit(signal);
+    //exit(signal);
 }

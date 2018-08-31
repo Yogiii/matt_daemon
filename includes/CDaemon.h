@@ -12,7 +12,6 @@
 
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
-#define closesocket(s) close (s)
 #define BUFFER_SIZE 2048
 
 typedef int SOCKET;
@@ -22,7 +21,14 @@ typedef struct sockaddr SOCKADDR;
 class CDaemon
 {
 public:
-    CDaemon();
+
+    static CDaemon *instance()
+    {
+        // instance unique
+        if (!_singleton)
+            _singleton = new CDaemon;
+        return _singleton;
+    }
 
     bool init();
     void startServer();
@@ -39,6 +45,9 @@ private:
     int _lockFilefd;
     int _countClient = 0;
 	std::vector<int> _fds;
+
+    static CDaemon *_singleton;
+    CDaemon();
 };
 
 #endif // CDAEMON_H
